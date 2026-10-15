@@ -39,8 +39,35 @@ It prints one line per check. Fix the failures yourself: the agent may explain a
 ## How to start it
 <!-- The exact command, so the lecturer can run your server too. -->
 
+From the repository root:
+
+```bash
+npm run --silent mcp
+```
+
+This runs `python3 mcp-server/server.py`. The server reads one JSON-RPC message per line on stdin, answers on stdout and logs to stderr.
+
 ## Session transcript
 <!-- Paste one full session: initialize, the reply, tools/list, one good tools/call, one that fails. -->
 
+```text
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"me","version":"1.0.0"}}}
+got: {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"me","version":"1.0.0"}}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"lectures","version":"0.1.0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+got: {"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+got: {"jsonrpc":"2.0","id":2,"method":"tools/list"}
+{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"find_lecture","description":"Look up a single course lecture by its number (integer 1\u201310) and return its exact title and list of topics. Call this whenever the user asks what a specific lecture covers, is about, or teaches.","inputSchema":{"type":"object","properties":{"number":{"type":"integer","description":"Lecture number, 1 to 10"}},"required":["number"]}},{"name":"search_lectures","description":"Search the course lectures for a keyword and return the number and title of every lecture whose title or topics contain it. Use it when asked which lecture covers a subject.","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"Word or phrase to look for, e.g. MCP or testing"}},"required":["query"]}}]}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find_lecture","arguments":{"number":5}}}
+got: {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find_lecture","arguments":{"number":5}}}
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Lecture 5: What the agent built, part 1. Topics: HTTP, REST vs GraphQL, data modeling, ORM, layers"}],"isError":false}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find_lecture","arguments":{"number":99}}}
+got: {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find_lecture","arguments":{"number":99}}}
+{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"There is no lecture 99. The course has lectures 1 to 10."}],"isError":true}}
+```
+
 ## The description experiment
 <!-- Three sentences: what you changed in the description, whether the model chose the tool differently, and why you think so. -->
+
+I changed only the description of `find_lecture`, once to the vague "Gets data from a file." and once to the much more precise "Look up a single course lecture by its number (integer 1–10) and return its exact title and list of topics. Call this whenever the user asks what a specific lecture covers, is about, or teaches.", and each time restarted Gemini CLI (gemini-3.8-flash) and asked "What does lecture 7 cover?" once in a fresh session. The model did not choose differently: with the original, the vague and the precise description it called `find_lecture` with `{"number": 7}` and gave the same answer, and the only difference was about 40 more input tokens for the precise text than for the vague one. I think the tool name `find_lecture` and the `number` parameter ("Lecture number, 1 to 10") already told the model what the tool does, since its reasoning with the vague text described it as a tool that "can retrieve data from a file based on a lecture number", so the description would only matter once the name and schema stop giving the answer away.
