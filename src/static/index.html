@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab Booking - Technical University</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+</head>
+<body>
+    <div class="container" x-data="labApp()" x-init="init()">
+        <!-- Authenticated View -->
+        <template x-if="user">
+            <div>
+                <!-- Top Header Card -->
+                <div class="card">
+                    <div class="header-bar">
+                        <div>
+                            <h1>Lab Booking System</h1>
+                            <p style="color: var(--color-text-muted);">
+                                Signed in as <strong x-text="user.email"></strong> (<span x-text="user.role"></span>)
+                            </p>
+                        </div>
+                        <button class="btn btn-secondary" @click="logout()" :disabled="loading">Sign out</button>
+                    </div>
+
+                    <!-- Blocked Notice (AC-5) -->
+                    <template x-if="user.is_blocked">
+                        <div class="banner banner-warning">
+                            <strong>Your account is blocked</strong>
+                            <p style="margin-top: 0.25rem;">You can browse upcoming events, but signing up and saving events are disabled.</p>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Messages -->
+                <div x-show="errorMessage" class="banner banner-error" x-text="errorMessage"></div>
+                <div x-show="successMessage" class="banner banner-success" x-text="successMessage"></div>
+
+                <!-- Upcoming Events Section (AC-4, AC-5) -->
+                <div class="card">
+                    <div class="header-bar">
+                        <h2>Upcoming Lab Events</h2>
+                        <button class="btn btn-secondary" @click="fetchEvents()" :disabled="eventsLoading">Refresh</button>
+                    </div>
+
+                    <!-- 1. Loading State -->
+                    <template x-if="eventsLoading">
+                        <div class="empty-state">
+                            <p>Loading upcoming events...</p>
+                        </div>
+                    </template>
+
+                    <!-- 2. Error State -->
+                    <template x-if="!eventsLoading && eventsError">
+                        <div class="banner banner-error" x-text="eventsError"></div>
+                    </template>
+
+                    <!-- 3. Empty State -->
+                    <template x-if="!eventsLoading && !eventsError && events.length === 0">
+                        <div class="empty-state">
+                            <h3>No upcoming lab events found</h3>
+                            <p>There are currently no scheduled lab sessions open for booking. Please check back later.</p>
+                        </div>
+                    </template>
+
+                    <!-- 4. Success / List State -->
+                    <template x-if="!eventsLoading && !eventsError && events.length > 0">
+                        <div class="events-grid">
+                            <template x-for="event in events" :key="event.id">
+                                <div class="event-card">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+                                        <h3 x-text="event.title"></h3>
+                                        <span class="badge badge-seats" x-text="`${event.free_seats} free seats`"></span>
+                                    </div>
+
+                                    <div class="event-meta">
+                                        <span><strong>Room:</strong> <span x-text="event.room_name"></span></span>
+                                        <span><strong>Start:</strong> <span x-text="formatTime(event.start_time)"></span></span>
+                                        <span><strong>Duration:</strong> <span x-text="`${event.duration_minutes} min`"></span></span>
+                                        <span><strong>Total seats:</strong> <span x-text="event.seats"></span></span>
+                                    </div>
+
+                                    <p x-show="event.description" x-text="event.description" style="color: var(--color-text-muted); font-size: var(--font-size-sm);"></p>
+
+                                    <!-- AC-5: The Sign up and Save buttons are NOT shown for blocked users -->
+                                    <template x-if="!user.is_blocked">
+                                        <div class="event-actions">
+                                            <button class="btn btn-primary" @click="signUpForEvent(event.id)" :disabled="actionLoading === event.id">
+                                                Sign up
+                                            </button>
+                                            <button class="btn btn-outline" @click="saveEvent(event.id)" :disabled="actionLoading === event.id">
+                                                Save
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- Unauthenticated View: Sign in / Register Form -->
+        <template x-if="!user">
+            <div class="card" style="max-width: 480px; margin: 3rem auto;">
+                <h1>Lab Booking</h1>
+                <p style="color: var(--color-text-muted); margin-bottom: 1.5rem;">Technical University Lab Booking</p>
+
+                <div class="switch-tab">
+                    <button type="button" :class="{ 'active': mode === 'login' }" @click="setMode('login')">Sign In</button>
+                    <button type="button" :class="{ 'active': mode === 'register' }" @click="setMode('register')">Register</button>
+                </div>
+
+                <div x-show="errorMessage" class="banner banner-error" x-text="errorMessage"></div>
+                <div x-show="successMessage" class="banner banner-success" x-text="successMessage"></div>
+
+                <form @submit.prevent="submitAuthForm">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input id="email" type="email" x-model="email" required autocomplete="email" placeholder="name@tu-sofia.bg">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input id="password" type="password" x-model="password" required autocomplete="current-password" placeholder="At least 8 characters">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%;" :disabled="loading">
+                        <span x-show="!loading" x-text="mode === 'login' ? 'Sign In' : 'Create Account'"></span>
+                        <span x-show="loading">Please wait...</span>
+                    </button>
+                </form>
+
+                <p class="helper-text">Forgot your password? Ask an admin to reset it</p>
+            </div>
+        </template>
+    </div>
+
+    <script>
+        function labApp() {
+            return {
+                mode: 'login',
+                email: '',
+                password: '',
+                user: null,
+                loading: false,
+                errorMessage: '',
+                successMessage: '',
+
+                events: [],
+                eventsLoading: false,
+                eventsError: '',
+                actionLoading: null,
+
+                async init() {
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/auth/me');
+                        if (res.ok) {
+                            this.user = await res.json();
+                            await this.fetchEvents();
+                        }
+                    } catch (e) {
+                        // Unauthenticated
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                setMode(newMode) {
+                    this.mode = newMode;
+                    this.errorMessage = '';
+                    this.successMessage = '';
+                },
+
+                async submitAuthForm() {
+                    this.errorMessage = '';
+                    this.successMessage = '';
+                    this.loading = true;
+
+                    const endpoint = this.mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+
+                    try {
+                        const res = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: this.email, password: this.password })
+                        });
+
+                        const data = await res.json();
+
+                        if (!res.ok) {
+                            this.errorMessage = data.detail || 'An error occurred';
+                            return;
+                        }
+
+                        this.user = data;
+                        this.password = '';
+                        await this.fetchEvents();
+                    } catch (e) {
+                        this.errorMessage = 'Network error. Please try again.';
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async fetchEvents() {
+                    this.eventsLoading = true;
+                    this.eventsError = '';
+                    try {
+                        const res = await fetch('/api/events/upcoming');
+                        if (!res.ok) {
+                            const err = await res.json();
+                            this.eventsError = err.detail || 'Failed to load upcoming events.';
+                            return;
+                        }
+                        this.events = await res.json();
+                    } catch (e) {
+                        this.eventsError = 'Unable to reach the server to load events.';
+                    } finally {
+                        this.eventsLoading = false;
+                    }
+                },
+
+                async signUpForEvent(eventId) {
+                    this.actionLoading = eventId;
+                    this.errorMessage = '';
+                    this.successMessage = '';
+                    try {
+                        const res = await fetch(`/api/events/${eventId}/register`, { method: 'POST' });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            this.errorMessage = data.detail || 'Failed to sign up.';
+                            return;
+                        }
+                        this.successMessage = data.message || 'You are signed up';
+                        await this.fetchEvents();
+                    } catch (e) {
+                        this.errorMessage = 'Network error while attempting sign-up.';
+                    } finally {
+                        this.actionLoading = null;
+                    }
+                },
+
+                async saveEvent(eventId) {
+                    this.actionLoading = eventId;
+                    this.errorMessage = '';
+                    this.successMessage = '';
+                    try {
+                        const res = await fetch(`/api/events/${eventId}/save`, { method: 'POST' });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            this.errorMessage = data.detail || 'Failed to save event.';
+                            return;
+                        }
+                        this.successMessage = data.message || 'Event saved';
+                    } catch (e) {
+                        this.errorMessage = 'Network error while attempting to save event.';
+                    } finally {
+                        this.actionLoading = null;
+                    }
+                },
+
+                formatTime(isoStr) {
+                    if (!isoStr) return '';
+                    try {
+                        const date = new Date(isoStr);
+                        return new Intl.DateTimeFormat('en-GB', {
+                            timeZone: 'Europe/Sofia',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        }).format(date);
+                    } catch (e) {
+                        return isoStr;
+                    }
+                },
+
+                async logout() {
+                    this.loading = true;
+                    try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                        this.user = null;
+                        this.events = [];
+                        this.email = '';
+                        this.password = '';
+                        this.successMessage = 'Signed out';
+                    } catch (e) {
+                        this.errorMessage = 'Sign out failed';
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<title>SPEC.html</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+
+</head>
+
+<body>
+
+<h1>Lab Booking System</h1>
+<!-- Exercise 2. Write the non-goals first. Every acceptance criterion must be checkable in under a minute.
+     Keep these headings exactly as they are: the self-checks look for them by name.
+     The full target is on the course site under Resources → The course project. -->
+
+<h2>Project option</h2>
+<!-- One line: lab booking, study groups, club events, or the own project the lecturer approved. -->
+<p>Lab booking.</p>
+<h2>Goals</h2>
+<h3>Accounts and roles</h3>
+<ul>
+<li>There are three roles: user, organizer and admin.</li>
+<li>The first admins are created by a seed script or an environment variable. After that, only an admin can make someone an admin, by promoting an existing account or by creating a new admin account.</li>
+<li>The last admin can't be deleted, blocked or demoted, so someone can always manage the system.</li>
+<li>An admin can change roles, block accounts and delete accounts.</li>
+<li>Deleting or blocking an account frees that person's seats and equipment. If the account belongs to an organizer, their events are cancelled too, and the admin sees a warning first if the organizer has active events.</li>
+<li>A blocked user can still sign in and browse events, and sees a message that the account is blocked. They can't sign up for events or save them.</li>
+</ul>
+<h3>Rooms and equipment</h3>
+<ul>
+<li>The admin page manages rooms, organizers and users.</li>
+<li>The admin sets each room's default number of seats and equipment. Only an admin can change these defaults.</li>
+<li>An organizer can use a room's defaults for an event, or set different numbers for that event only: more, for example extra seats just for this event, or fewer, to free up space. This includes more equipment than the room has, for example when the organizer brings extra laptops. Changing an event's numbers never changes the room's defaults.</li>
+<li>No overlaps: a room holds one event at a time, and each piece of equipment is booked by one person at a time. This is checked when an event is created and whenever its time or room changes.</li>
+</ul>
+<h3>Creating and publishing events (organizer)</h3>
+<ul>
+<li>An organizer creates an event by choosing a free room, the number of seats and equipment, when reservation opens and closes, when the event starts, and how long it lasts.</li>
+<li>The organizer can mark equipment as required for the event. A user who has none of their own can book one. When none are left, users must bring their own.</li>
+<li>A new event books its room and time as soon as it is created, even before it is published. The organizer's profile shows their events that are not published yet.</li>
+<li>The organizer publishes the event after creating it.</li>
+</ul>
+<h3>Changing and cancelling events (organizer)</h3>
+<ul>
+<li>An organizer can edit and cancel their own events.</li>
+<li>An admin can edit, cancel and delete any event.</li>
+<li>Fewer seats: if the organizer lowers an event's seats, the latest registrations are removed.</li>
+<li>Less equipment: if the organizer lowers an event's equipment, the latest equipment bookings are removed. Those users keep their seats.</li>
+<li>New time: allowed only if the room is free at the new time.</li>
+<li>New room: allowed only if the new room is free at that time. The event starts with the new room's default seats and equipment, which the organizer can then change. Registrations and equipment bookings move to the new room, and the old room is freed. If the new room's defaults have fewer seats, the latest registrations are removed along with their equipment. If they only have less equipment, the latest users lose their equipment but keep their seats.</li>
+</ul>
+<h3>Signing up (user)</h3>
+<ul>
+<li>A user signs in, sees upcoming lab events, and signs up for one with free seats, booking equipment if needed.</li>
+<li>A user can cancel their reservation.</li>
+<li>A user can save events. Saved events are a list, not a queue: when a seat frees up, everyone who saved the event is notified, and the first to sign up gets it.</li>
+</ul>
+<h3>Notifications</h3>
+<ul>
+<li>Notifications appear in a bell on the page and update when a page loads.</li>
+<li>A user is notified of every change to their reservations and every update to their events: cancellation, deletion, time change and other changes. This applies whether the organizer or an admin makes the change.</li>
+<li>A user is notified when reservation opens for an event they saved.</li>
+<li>Users who asked to be notified get a notification when equipment for an event frees up.</li>
+<li>An organizer gets a notification for every sign-up to their events.</li>
+</ul>
+<h3>Main page</h3>
+<ul>
+<li>The main page shows an announcement for every newly published event, newest first. Each announcement stays until its event starts, and the list updates on page load.</li>
+</ul>
+<h2>Non-goals</h2>
+<ul>
+<li>no payment system: it is university booking system during lab events.</li>
+<li>no take home: the equipment is available in the room only during the event.</li>
+<li>no recurring events: every event is created separately.</li>
+<li>no mobile app needed: web UI that works well on a phone</li>
+<li>no emails, no sms: the user check the site</li>
+<li>no browser notifications: no notifications needed outside of the page. No notification pop-ups outside of the page.</li>
+<li>no advertising services needed: do not add ad banners</li>
+<li>not selling equipment: it will be used only for sharing the university equipment during lab events if needed</li>
+</ul>
+<h2>Constraints</h2>
+<ul>
+<li>the passwords are stored as a salted PBKDF2-HMAC-SHA256 hash in database with 600000 iterations. Tests may use fewer iterations to stay fast; the running app always uses 600000.</li>
+<li>python backend with fastapi</li>
+<li>postgreSQL as a database</li>
+<li>plain HTML, CSS and Javascript in the UI. CSS framework and CDN libraries are okay, like AlpineJS. No build step.</li>
+<li>the UI is in English only.</li>
+<li>all times are in the Europe/Sofia time zone: the app is used only at the Technical University.</li>
+</ul>
+<h2>The model feature</h2>
+<!-- Which model, which modality, and what it does for a user.
+     Name three things or the check fails: the input it receives, the output it produces,
+     and what happens when the model is slow, rate-limited or wrong. -->
+<ul>
+<li>Model: Google Gemini 2.5 Flash (<code>gemini-2.5-flash</code>) through the Gemini API, text in and JSON out. The model name comes from <code>MODEL_NAME</code> and the key from <code>GEMINI_API_KEY</code>. Both features below use it.</li>
+</ul>
+<h3>Event search (users)</h3>
+<ul>
+<li>Input: the text a user types into the search box, for example "laptop lab on Thursday afternoon", plus today's date in Europe/Sofia and the list of room names. Nothing about the user is sent: no name, no email, no reservations.</li>
+<li>Output: search filters as JSON: date range, time of day, room, whether equipment is needed, and keywords. The app checks every filter (a real date, a room that exists) and drops the ones that fail, then runs the normal database query over published upcoming events. Every result comes from the database. The screen shows the filters the model understood, labelled "Suggested filters", and the user can change them.</li>
+<li>When it fails: the call times out after 10 seconds. On a timeout, a 429 rate limit, a provider error, a missing key, or output that isn't valid JSON, the app falls back to keyword search over event titles and descriptions and shows "Smart search isn't available right now, showing keyword results". The rest of the page keeps working.</li>
+</ul>
+<h3>Event draft helper (organizers)</h3>
+<ul>
+<li>Input: the organizer's rough notes about the event, plus the chosen room's name and its default seats and equipment. No data about other users is sent.</li>
+<li>Output: a suggested title, description and required equipment as JSON, filled into the create-event form and labelled "Suggestion". Equipment the room doesn't have is dropped. The model never sets the room, the times or the seats. Nothing is saved until the organizer edits the form and clicks Create, and the normal rules, including the overlap check, still apply.</li>
+<li>When it fails: the same 10-second timeout and the same failure cases as search. The form stays empty and fully usable, and the organizer sees "Suggestions aren't available right now. Fill in the form yourself".</li>
+</ul>
+<h2>Auth</h2>
+<!-- Local sign-in plus at least one provider. Say how an account signing in both ways stays one account. -->
+<ul>
+<li>Local: a visitor registers with an email and a password of at least 8 characters, and gets the user role. The password is stored as a salted PBKDF2-HMAC-SHA256 hash (see Constraints). After sign-in the server sets a signed session cookie (<code>SESSION_SECRET</code>) that is HttpOnly, Secure and SameSite=Lax. Signing out clears it. A wrong email or password gets the same message, so nobody can tell which emails have accounts.</li>
+<li>Provider: Sign in with Google (OAuth 2.0 / OpenID Connect, authorization code flow). The exchange happens on the server, and <code>GOOGLE_CLIENT_SECRET</code> never reaches the browser. The account stores Google's user id (<code>sub</code>). The first Google sign-in with an unknown email creates a new account with the user role.</li>
+<li>Linking: one person, one account, and the email is the only way to match an account the first time. A Google sign-in is matched by email only if Google reports the email as verified. If a local account already has that email, the person must enter that account's password once. After that, the Google id is saved on the account, and both ways sign in to the same account, with the same role and reservations. Registering locally with an email that already belongs to a Google account is refused with "This email already has an account. Sign in with Google". Blocking applies to the account, so a blocked person is blocked both ways.</li>
+</ul>
+<h2>MCP tools</h2>
+<!-- At least three tools your own MCP server exposes over this project's data.
+     Each tool calls the same service functions the HTTP API calls, so the same rules apply.
+     A description shorter than 20 characters is not a description. -->
+<p>Every tool acts as the account that <code>MCP_TOKEN</code> belongs to, and calls the same service function as the matching HTTP route.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+<th>Who may call it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>list_upcoming_events</code></td>
+<td>Lists published events that have not started yet, with room, start time, duration, free seats and free equipment. Optional filters: date range, room, and whether equipment is needed.</td>
+<td>Any signed-in account, including blocked ones</td>
+</tr>
+<tr>
+<td><code>get_event</code></td>
+<td>Returns one event by id: title, description, room, start time, duration, reservation window, free seats and free equipment. An unpublished event is returned only to its organizer or an admin.</td>
+<td>Any signed-in account</td>
+</tr>
+<tr>
+<td><code>sign_up_for_event</code></td>
+<td>Signs the calling account up for an event, optionally with one piece of equipment. It is refused with the same message as the website when the event is full, reservation is not open, or the account is blocked.</td>
+<td>Any signed-in account that is not blocked</td>
+</tr>
+<tr>
+<td><code>cancel_my_reservation</code></td>
+<td>Cancels the calling account's own reservation for an event and frees the seat and any booked equipment. It cannot cancel anyone else's reservation.</td>
+<td>The account that owns the reservation</td>
+</tr>
+<tr>
+<td><code>list_my_reservations</code></td>
+<td>Lists the calling account's own reservations, with event, room, start time and whether equipment is booked.</td>
+<td>Any signed-in account</td>
+</tr>
+<tr>
+<td><code>find_free_rooms</code></td>
+<td>Lists rooms that are free for a given start time and duration, with their default seats and equipment, so an organizer can plan an event before creating it.</td>
+<td>Organizer or admin</td>
+</tr>
+</tbody>
+</table>
+<h2>UI</h2>
+<!-- Stack, and the three or more screens. The graded checklist lives in docs/UI.md. -->
+
+<ul>
+<li>
+<p>Stack: plain HTML, CSS and JavaScript, with Alpine.js loaded from a CDN at a pinned version, and no build step. FastAPI serves the pages as static files, and the JavaScript calls the FastAPI JSON routes with the session cookie. Those routes use the same services as the MCP tools. The CSS uses its own design tokens as custom properties: one spacing scale and one type scale. Pages are in English (<code>lang="en"</code>), show all times in Europe/Sofia, and work at 380, 768 and 1280 pixels wide.</p>
+</li>
+<li>
+<p>Every screen has a loading, an empty, an error and a success state, and a header with the notification bell, which updates on page load.</p>
+</li>
+</ul>
+<p>Screens:</p>
+<ol>
+<li>
+<p>Sign in and register: email and password, "Sign in with Google", and the one-time password prompt that links a Google sign-in to an existing local account.</p>
+</li>
+<li>
+<p>Main page: announcements for newly published events (newest first), the list of upcoming events, and the search box. Smart search shows the filters it understood as "Suggested filters" and falls back to keyword results.</p>
+</li>
+<li>
+<p>Event page: details, free seats and free equipment, plus the actions the viewer is allowed:</p>
+</li>
+<li>users: Sign up (with or without equipment), Save, "Notify me about equipment", Cancel reservation;</li>
+<li>the event's organizer: Edit, Publish, Cancel;</li>
+<li>
+<p>admins: Edit, Cancel, Delete.
+   A blocked user sees the event with no actions and the block message.</p>
+</li>
+<li>
+<p>My reservations: the user's reservations and saved events, each with a Cancel or Remove action.</p>
+</li>
+<li>
+<p>Notifications: the full list behind the bell, newest first. Each entry keeps the event's title and time, even after the event is deleted.</p>
+</li>
+<li>
+<p>Organizer profile: the organizer's events, with the unpublished ones marked "Not published", and a "Create event" button.</p>
+</li>
+<li>
+<p>Create and edit event: choose a free room, then times, the reservation window, and seats and equipment pre-filled from the room's defaults. Required equipment is marked here. The draft helper fills in a suggested title, description and equipment, labelled "Suggestion".</p>
+</li>
+<li>
+<p>Admin page: rooms with their default seats and equipment; accounts with role changes, block and delete, including the warning when an organizer has active events; and all events, with edit, cancel and delete.</p>
+</li>
+</ol>
+<h2>Architecture</h2>
+<!-- Exercise 3. One request traced through every layer, naming the file for each one,
+     plus one place where your own code does not match this layering. -->
+
+<h2>Acceptance criteria</h2>
+<!-- Every criterion carries an id. A test proves it by naming that id in its title, for example
+     test('AC-3 a booking that overlaps another is refused with 409', ...).
+     Say who acts, what they see, and what must be true in the database. -->
+<h3>Slice 1: sign-in and the upcoming events list</h3>
+<ul>
+<li>[AC-1] A visitor registers with an email and a password, signs in, and sees the list of upcoming events. In <code>users</code>, the stored password is a salted PBKDF2-HMAC-SHA256 hash that records its salt and its iteration count, 600000, and is not the password itself.</li>
+<li>[AC-2] Two users register with the same password. Both can sign in and see the list of upcoming events, and their stored hashes in <code>users</code> are different.</li>
+<li>[AC-3] A user who signs in with a wrong password sees "Wrong email or password" and stays on the sign-in page. No session cookie is set.</li>
+<li>[AC-4] The database holds a published event that starts tomorrow, an unpublished event, and a published event whose start time is an hour ago. A signed-in user sees only the first one in the list, with its room, start time and free seats.</li>
+<li>[AC-5] A blocked user signs in, sees "Your account is blocked" and can browse the events list. The Sign up and Save buttons are not shown, a direct request to sign up or save is refused with 403, and no row appears in <code>registrations</code> or <code>saved_events</code>.</li>
+</ul>
+<h3>Signing up and saving events (user)</h3>
+<ul>
+<li>[AC-6] A user signs up for an event with free seats and sees "You are signed up". One row appears in <code>registrations</code>, and the event's free seats go down by one.</li>
+<li>[AC-7] A user who signs up for an event with no free seats sees "This event is full", and no new row appears in <code>registrations</code>.</li>
+<li>[AC-8] In <code>events</code>, one event's reservation opens tomorrow and another's closed yesterday. A user who tries to sign up for either sees "Reservation is not open", and no new row appears in <code>registrations</code>.</li>
+<li>[AC-9] A user signs up and books a laptop while laptops are left. They see "You are signed up with a laptop", and one row appears in <code>equipment_bookings</code>. When none are left, the user can still sign up, sees "No equipment left: please bring your own", and no row appears in <code>equipment_bookings</code>.</li>
+<li>[AC-10] A user cancels their reservation and sees "Your reservation is cancelled". Their rows for that event in <code>registrations</code> and <code>equipment_bookings</code> are gone, and the free seats go up by one.</li>
+<li>[AC-11] Two users have saved a full event. A third user cancels their reservation, which frees a seat, and both saving users get a notification. The first to sign up sees "You are signed up" and has a row in <code>registrations</code>. The second sees "This event is full" and has no row.</li>
+</ul>
+<h3>Creating and changing events (organizer and admin)</h3>
+<ul>
+<li>[AC-12] An organizer creates an event in Room 101 from 10:00 to 12:00 while another event holds Room 101 from 11:00 to 13:00. They see "This room is already booked at that time", and no new row appears in <code>events</code>.</li>
+<li>[AC-13] An organizer moves an event to a time when its room is already booked. They see "This room is already booked at that time", and the event's time in <code>events</code> is unchanged.</li>
+<li>[AC-14] An organizer moves an event to a room that is booked at that time. They see "This room is already booked at that time", and the event's room in <code>events</code> is unchanged.</li>
+<li>[AC-15] In a room with 20 default seats and 10 laptops, an organizer creates an event with 25 seats and 15 laptops. They see the new event with 25 seats and 15 laptops. The event in <code>events</code> has 25 and 15, and the room in <code>rooms</code> still has 20 and 10.</li>
+<li>[AC-16] An organizer sees no way to edit a room. A direct request from an organizer to change a room's default seats is refused with 403, and the room in <code>rooms</code> is unchanged.</li>
+<li>[AC-17] An event has 10 seats and 10 registrations. The organizer lowers it to 8 seats and sees the event with 8 seats. The two latest registrations are removed from <code>registrations</code>, and those two users see a notification in the bell.</li>
+<li>[AC-18] An event has 5 laptops, all booked. The organizer lowers it to 3 and sees the event with 3 laptops. The two latest rows in <code>equipment_bookings</code> are removed, those two users keep their rows in <code>registrations</code>, and they see a notification in the bell.</li>
+<li>[AC-19] An organizer moves an event with 15 registrations to a free room whose defaults are 12 seats. The organizer sees the event in the new room with the new room's default seats and equipment. The three latest registrations are removed from <code>registrations</code>, and those three users see a notification in the bell.</li>
+<li>[AC-20] An organizer creates an event and doesn't publish it. Their profile lists the event as not published, and its status in <code>events</code> is <code>draft</code>. Another organizer who tries to create an event in that room at that time sees "This room is already booked at that time".</li>
+<li>[AC-21] An organizer opens another organizer's event and sees no Edit or Cancel button. A direct request to change its start time or cancel it is refused with 403, and the event in <code>events</code> is unchanged. An admin changes the same event's start time, sees the new time on the event page, and <code>events</code> holds the new time.</li>
+</ul>
+<h3>Accounts and roles (admin)</h3>
+<ul>
+<li>[AC-22] The only admin tries to demote, block or delete their own account and sees "At least one admin must remain". Their row in <code>users</code> is unchanged.</li>
+<li>[AC-23] An admin blocks a user who is signed up for an event with a laptop. The admin sees the user marked as blocked, and the user sees a notification that their reservation was removed. That user's rows in <code>registrations</code> and <code>equipment_bookings</code> are gone, and the seat and the laptop are free again.</li>
+<li>[AC-24] An admin deletes an organizer who has an active event. The admin first sees a warning that the organizer has active events. After confirming, the organizer's row is gone from <code>users</code>, the event's status in <code>events</code> is <code>cancelled</code>, and everyone signed up for it gets a notification.</li>
+<li>[AC-25] An admin promotes a user to admin: the user's role in <code>users</code> is <code>admin</code>, and they can open the admin page. A user who is not an admin sees no link to the admin page, and opening its address directly shows "You don't have access to this page" with status 403.</li>
+</ul>
+<h3>Notifications and the main page</h3>
+<ul>
+<li>[AC-26] An admin changes the start time of an event a user is signed up for. The next time that user loads a page, the bell shows a notification about the new time, and one new row for that user appears in <code>notifications</code>.</li>
+<li>[AC-27] An admin deletes an event a user is signed up for. The user's notification still shows the event's title and time, although the event is gone from <code>events</code>.</li>
+<li>[AC-28] A user signs up for an event. Its organizer gets one new row in <code>notifications</code> and sees it in the bell.</li>
+<li>[AC-29] A user has saved an event, and its reservation opening time in <code>events</code> is set to a minute ago. On the user's next page load, the bell shows "Reservation is open" for that event, and one new row for that user appears in <code>notifications</code>. Loading another page adds no second row.</li>
+<li>[AC-30] On an event's page, one user clicks "Notify me about equipment" and another user doesn't. A third user cancels their laptop booking for that event. The first user sees a notification in the bell and has one new row in <code>notifications</code>. The second user has none.</li>
+<li>[AC-31] An organizer publishes event A, then event B. The main page shows B's announcement above A's. After A's start time in <code>events</code> is set to a minute ago, the main page no longer shows A's announcement.</li>
+</ul>
+<h2>Traceability</h2>
+<!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
+<table>
+<thead>
+<tr>
+<th>Criterion</th>
+<th>Test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC-1</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2>Spec vs result</h2>
+<!-- After the agent builds the slice: which criteria passed, which it missed or reinterpreted, and what you changed in this spec because of it. -->
+</body>
+</html>
