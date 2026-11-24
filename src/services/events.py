@@ -35,6 +35,9 @@ class EventsService:
     def save_event(self, user: dict[str, Any], event_id: int) -> dict[str, Any]:
         self._refuse_blocked(user)
         self._published_event(event_id)
+        # Saving is for being told about free seats, which a registered user doesn't need
+        if self.events_repo.get_registration(user["id"], event_id):
+            raise ConflictError("You are already signed up for this event")
         return self.events_repo.create_saved_event(user["id"], event_id)
 
     def _refuse_blocked(self, user: dict[str, Any]) -> None:

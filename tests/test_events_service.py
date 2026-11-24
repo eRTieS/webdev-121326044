@@ -34,6 +34,12 @@ class FakeEventsRepository:
     def get_event(self, event_id: int):
         return next((e for e in self.events if e["id"] == event_id), None)
 
+    def get_registration(self, user_id: int, event_id: int):
+        return next(
+            (r for r in self.registrations if r["user_id"] == user_id and r["event_id"] == event_id),
+            None,
+        )
+
     def create_registration_if_seat_free(self, user_id: int, event_id: int):
         event = None if self.vanish_on_lock else self.get_event(event_id)
         if event is None:
@@ -113,6 +119,16 @@ def test_saving_an_event_twice_keeps_one_saved_row():
     second = service.save_event(ACTIVE, event_id=1)
     assert first == second
     assert len(repo.saved_events) == 1
+
+
+def test_saving_an_event_you_are_signed_up_for_is_refused():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    service.sign_up(ACTIVE, event_id=1)
+
+    with pytest.raises(ConflictError, match="You are already signed up for this event"):
+        service.save_event(ACTIVE, event_id=1)
+    assert repo.saved_events == []
 
 
 def test_sign_up_and_save_refuse_unknown_and_unpublished_events():
