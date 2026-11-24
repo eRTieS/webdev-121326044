@@ -4,7 +4,7 @@ Read this file at the start of every session. Keep it short and correct; update 
 
 ## Project
 <!-- One or two sentences: what the app does and for whom. Link SPEC.md. -->
-A lab booking web app for the Technical University: organizers publish lab events in rooms with a limited number of seats and equipment such as laptops, and users sign up for a seat and book equipment if they have none of their own. Admins manage rooms, accounts and all events.
+A lab booking web app for the Technical University: organizers publish lab events in rooms with a limited number of seats and equipment such as laptops, and users sign up for a seat and book equipment if they have none of their own. Admins manage rooms, accounts and all events. Users are usually students, organizers are teachers or teaching assistants, and admins are lab or IT staff.
 
 See `SPEC.md` for goals, non-goals and acceptance criteria.
 
@@ -28,7 +28,7 @@ Run everything from the repository root. Settings come from `.env` (copy `.env.e
 - `src/main.py`: creates the FastAPI app, mounts `src/static/` and includes the routes.
 - `src/routes/`: HTTP route handlers. They read the request, call a service, and turn the result into a status code. No rules and no SQL here.
 - `src/services/`: **all business rules live here**: seats, equipment, overlaps, roles, blocking, notifications, and the checks on the model's output. Services know nothing about HTTP or MCP, and get the data layer and the model client passed in, so tests can pass fakes.
-- `src/data/`: data access. The only place that writes SQL. One exception, on purpose: `create_registration_if_seat_free` checks the seat count itself, because only a locked event row stops two people taking the last seat.
+- `src/data/`: data access. The only place that writes SQL. Two exceptions, on purpose: `create_registration_if_seat_free` checks the seat count itself, because only a locked event row stops two people taking the last seat; and it counts and allocates equipment (laptops) under the same lock, returning a result code while the service picks the user-facing message.
 - Errors: a service raises a `ServiceError` subclass from `src/services/errors.py` with a message for the user. Routes map `BlockedUserError` to 403, `NotFoundError` to 404 and `ConflictError` to 409, and the client gets `{"detail": "<message>"}`.
 - `src/clients/gemini.py`: the only file that names the model provider.
 - `src/static/`: the HTML, CSS and JavaScript pages.
@@ -71,12 +71,15 @@ that talks to the database directly is a second, unguarded way into your data: n
 - deleting files or folders
 - editing a migration that has already run
 - installing or removing dependencies
-- pushing, tagging or changing CI
+- committing, pushing, tagging or changing CI
 - anything that touches secrets or `.env`
 - changing an authentication or authorization rule
 - adding, renaming or removing an MCP tool
 - changing a coverage threshold
 - sending user data to a third-party model
+- changing a goal, non-goal or acceptance criterion in `SPEC.md`
+- anything the approved plan or request doesn't cover, such as another file, a new table or migration, a different library, or a cascade
+- creating, dropping, migrating or seeding a database, running anything with `sudo`, or starting containers
 
 ## Never
 - commit secrets, passwords, API keys or an OAuth client secret

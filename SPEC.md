@@ -12,6 +12,7 @@ Lab booking.
 
 ### Accounts and roles
 - There are three roles: user, organizer and admin.
+- Users are usually students, organizers are teachers or teaching assistants who run lab sessions, and admins are the lab or IT staff who manage rooms and accounts.
 - The first admins are created by a seed script or an environment variable. After that, only an admin can make someone an admin, by promoting an existing account or by creating a new admin account.
 - The last admin can't be deleted, blocked or demoted, so someone can always manage the system.
 - An admin can change roles, block accounts, delete accounts and reset the password of a local account. There is no self-service reset; the sign-in page tells users to ask an admin.
@@ -42,6 +43,7 @@ Lab booking.
 - A user signs in, sees upcoming lab events, and signs up for one with free seats, booking equipment if needed.
 - A user can cancel their reservation.
 - A user can save events. Saved events are a list, not a queue: when a seat frees up, everyone who saved the event is notified, and the first to sign up gets it.
+- Signing up for a saved event removes it from the user's saved events, so they are not told about free seats in an event they already have a seat in.
 
 ### Notifications
 - Notifications appear in a bell on the page and update when a page loads.
@@ -147,39 +149,47 @@ Screens:
 - [AC-4] The database holds a published event that starts tomorrow, an unpublished event, and a published event whose start time is an hour ago. A signed-in user sees only the first one in the list, with its room, start time and free seats.
 - [AC-5] A blocked user signs in, sees "Your account is blocked" and can browse the events list. The Sign up and Save buttons are not shown, a direct request to sign up or save is refused with 403, and no row appears in `registrations` or `saved_events`.
 
-### Signing up and saving events (user)
+### Slice 2: Signing up and saving events (user)
 - [AC-6] A user signs up for an event with free seats and sees "You are signed up". One row appears in `registrations`, and the event's free seats go down by one.
 - [AC-7] A user who signs up for an event with no free seats sees "This event is full", and no new row appears in `registrations`.
 - [AC-8] In `events`, one event's reservation opens tomorrow and another's closed yesterday. A user who tries to sign up for either sees "Reservation is not open", and no new row appears in `registrations`.
 - [AC-9] A user signs up and books a laptop while laptops are left. They see "You are signed up with a laptop", and one row appears in `equipment_bookings`. When none are left, the user can still sign up, sees "No equipment left: please bring your own", and no row appears in `equipment_bookings`.
 - [AC-10] A user cancels their reservation and sees "Your reservation is cancelled". Their rows for that event in `registrations` and `equipment_bookings` are gone, and the free seats go up by one.
 - [AC-11] Two users have saved a full event. A third user cancels their reservation, which frees a seat, and both saving users get a notification. The first to sign up sees "You are signed up" and has a row in `registrations`. The second sees "This event is full" and has no row.
+- [AC-12] A user who is already signed up for an event signs up for it again and sees "You are already signed up". The request is refused with 409, there is still exactly one row for that user and event in `registrations`, and the event's free seats are unchanged.
+- [AC-13] A user tries to sign up for an event id that doesn't exist, and for a draft event. Both requests are refused with 404, the user sees "Event not found", and no row appears in `registrations` or `equipment_bookings`.
+- [AC-14] In `events`, a published event's start time is set to a minute ago while its reservation close is still in the future. A user who tries to sign up for it sees "Reservation is not open", the request is refused with 409, and no row appears in `registrations`.
+- [AC-15] A user tries to cancel a reservation they don't have: once for an event they never signed up for, and once for an event id that doesn't exist. Both requests are refused with 404, the user sees "You have no reservation for this event", and `registrations` and `equipment_bookings` are unchanged.
+- [AC-16] A user tries to save a draft event and an event id that doesn't exist. Both requests are refused with 404, the user sees "Event not found", and no row appears in `saved_events`.
+- [AC-17] A user saves the same event twice and sees "Event saved" both times. There is exactly one row for that user and event in `saved_events`.
+- [AC-18] A user who is signed up for an event tries to save it and sees "You are already signed up for this event". The request is refused with 409, and no row for that user and event appears in `saved_events`.
 
-### Creating and changing events (organizer and admin)
-- [AC-12] An organizer creates an event in Room 101 from 10:00 to 12:00 while another event holds Room 101 from 11:00 to 13:00. They see "This room is already booked at that time", and no new row appears in `events`.
-- [AC-13] An organizer moves an event to a time when its room is already booked. They see "This room is already booked at that time", and the event's time in `events` is unchanged.
-- [AC-14] An organizer moves an event to a room that is booked at that time. They see "This room is already booked at that time", and the event's room in `events` is unchanged.
-- [AC-15] In a room with 20 default seats and 10 laptops, an organizer creates an event with 25 seats and 15 laptops. They see the new event with 25 seats and 15 laptops. The event in `events` has 25 and 15, and the room in `rooms` still has 20 and 10.
-- [AC-16] An organizer sees no way to edit a room. A direct request from an organizer to change a room's default seats is refused with 403, and the room in `rooms` is unchanged.
-- [AC-17] An event has 10 seats and 10 registrations. The organizer lowers it to 8 seats and sees the event with 8 seats. The two latest registrations are removed from `registrations`, and those two users see a notification in the bell.
-- [AC-18] An event has 5 laptops, all booked. The organizer lowers it to 3 and sees the event with 3 laptops. The two latest rows in `equipment_bookings` are removed, those two users keep their rows in `registrations`, and they see a notification in the bell.
-- [AC-19] An organizer moves an event with 15 registrations to a free room whose defaults are 12 seats. The organizer sees the event in the new room with the new room's default seats and equipment. The three latest registrations are removed from `registrations`, and those three users see a notification in the bell.
-- [AC-20] An organizer creates an event and doesn't publish it. Their profile lists the event as not published, and its status in `events` is `draft`. Another organizer who tries to create an event in that room at that time sees "This room is already booked at that time".
-- [AC-21] An organizer opens another organizer's event and sees no Edit or Cancel button. A direct request to change its start time or cancel it is refused with 403, and the event in `events` is unchanged. An admin changes the same event's start time, sees the new time on the event page, and `events` holds the new time.
 
-### Accounts and roles (admin)
-- [AC-22] The only admin tries to demote, block or delete their own account and sees "At least one admin must remain". Their row in `users` is unchanged.
-- [AC-23] An admin blocks a user who is signed up for an event with a laptop. The admin sees the user marked as blocked, and the user sees a notification that their reservation was removed. That user's rows in `registrations` and `equipment_bookings` are gone, and the seat and the laptop are free again.
-- [AC-24] An admin deletes an organizer who has an active event. The admin first sees a warning that the organizer has active events. After confirming, the organizer's row is gone from `users`, the event's status in `events` is `cancelled`, and everyone signed up for it gets a notification.
-- [AC-25] An admin promotes a user to admin: the user's role in `users` is `admin`, and they can open the admin page. A user who is not an admin sees no link to the admin page, and opening its address directly shows "You don't have access to this page" with status 403.
+### Slice 3: Creating and changing events (organizer and admin)
+- [AC-19] An organizer creates an event in Room 101 from 10:00 to 12:00 while another event holds Room 101 from 11:00 to 13:00. They see "This room is already booked at that time", and no new row appears in `events`.
+- [AC-20] An organizer moves an event to a time when its room is already booked. They see "This room is already booked at that time", and the event's time in `events` is unchanged.
+- [AC-21] An organizer moves an event to a room that is booked at that time. They see "This room is already booked at that time", and the event's room in `events` is unchanged.
+- [AC-22] In a room with 20 default seats and 10 laptops, an organizer creates an event with 25 seats and 15 laptops. They see the new event with 25 seats and 15 laptops. The event in `events` has 25 and 15, and the room in `rooms` still has 20 and 10.
+- [AC-23] An organizer sees no way to edit a room. A direct request from an organizer to change a room's default seats is refused with 403, and the room in `rooms` is unchanged.
+- [AC-24] An event has 10 seats and 10 registrations. The organizer lowers it to 8 seats and sees the event with 8 seats. The two latest registrations are removed from `registrations`, and those two users see a notification in the bell.
+- [AC-25] An event has 5 laptops, all booked. The organizer lowers it to 3 and sees the event with 3 laptops. The two latest rows in `equipment_bookings` are removed, those two users keep their rows in `registrations`, and they see a notification in the bell.
+- [AC-26] An organizer moves an event with 15 registrations to a free room whose defaults are 12 seats. The organizer sees the event in the new room with the new room's default seats and equipment. The three latest registrations are removed from `registrations`, and those three users see a notification in the bell.
+- [AC-27] An organizer creates an event and doesn't publish it. Their profile lists the event as not published, and its status in `events` is `draft`. Another organizer who tries to create an event in that room at that time sees "This room is already booked at that time".
+- [AC-28] An organizer opens another organizer's event and sees no Edit or Cancel button. A direct request to change its start time or cancel it is refused with 403, and the event in `events` is unchanged. An admin changes the same event's start time, sees the new time on the event page, and `events` holds the new time.
 
-### Notifications and the main page
-- [AC-26] An admin changes the start time of an event a user is signed up for. The next time that user loads a page, the bell shows a notification about the new time, and one new row for that user appears in `notifications`.
-- [AC-27] An admin deletes an event a user is signed up for. The user's notification still shows the event's title and time, although the event is gone from `events`.
-- [AC-28] A user signs up for an event. Its organizer gets one new row in `notifications` and sees it in the bell.
-- [AC-29] A user has saved an event, and its reservation opening time in `events` is set to a minute ago. On the user's next page load, the bell shows "Reservation is open" for that event, and one new row for that user appears in `notifications`. Loading another page adds no second row.
-- [AC-30] On an event's page, one user clicks "Notify me about equipment" and another user doesn't. A third user cancels their laptop booking for that event. The first user sees a notification in the bell and has one new row in `notifications`. The second user has none.
-- [AC-31] An organizer publishes event A, then event B. The main page shows B's announcement above A's. After A's start time in `events` is set to a minute ago, the main page no longer shows A's announcement.
+### Slice 4: Accounts and roles (admin)
+- [AC-29] The only admin tries to demote, block or delete their own account and sees "At least one admin must remain". Their row in `users` is unchanged.
+- [AC-30] An admin blocks a user who is signed up for an event with a laptop. The admin sees the user marked as blocked, and the user sees a notification that their reservation was removed. That user's rows in `registrations` and `equipment_bookings` are gone, and the seat and the laptop are free again.
+- [AC-31] An admin deletes an organizer who has an active event. The admin first sees a warning that the organizer has active events. After confirming, the organizer's row is gone from `users`, the event's status in `events` is `cancelled`, and everyone signed up for it gets a notification.
+- [AC-32] An admin promotes a user to admin: the user's role in `users` is `admin`, and they can open the admin page. A user who is not an admin sees no link to the admin page, and opening its address directly shows "You don't have access to this page" with status 403.
+
+### Slice 5: Notifications and the main page
+- [AC-33] An admin changes the start time of an event a user is signed up for. The next time that user loads a page, the bell shows a notification about the new time, and one new row for that user appears in `notifications`.
+- [AC-34] An admin deletes an event a user is signed up for. The user's notification still shows the event's title and time, although the event is gone from `events`.
+- [AC-35] A user signs up for an event. Its organizer gets one new row in `notifications` and sees it in the bell.
+- [AC-36] A user has saved an event, and its reservation opening time in `events` is set to a minute ago. On the user's next page load, the bell shows "Reservation is open" for that event, and one new row for that user appears in `notifications`. Loading another page adds no second row.
+- [AC-37] On an event's page, one user clicks "Notify me about equipment" and another user doesn't. A third user cancels their laptop booking for that event. The first user sees a notification in the bell and has one new row in `notifications`. The second user has none.
+- [AC-38] An organizer publishes event A, then event B. The main page shows B's announcement above A's. After A's start time in `events` is set to a minute ago, the main page no longer shows A's announcement.
 
 ## Traceability
 <!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
