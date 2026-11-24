@@ -127,3 +127,97 @@ def test_deleting_an_organizer_keeps_their_events(passwords):
         cur.execute("DELETE FROM users WHERE email = 'organizer@example.com';")
         cur.execute("SELECT organizer_id FROM events WHERE id = %s;", (lab,))
         assert cur.fetchone()["organizer_id"] is None
+
+
+def test_laptop_is_booked_while_one_is_free(passwords):
+    repo = EventsRepository(TEST_DB)
+    admin = UsersRepository(TEST_DB).get_user_by_email("admin@example.com")["id"]
+    lab = event_id("Advanced Python Lab")
+
+    with get_cursor(TEST_DB) as cur:
+        cur.execute("UPDATE events SET equipment_count = 5 WHERE id = %s;", (lab,))
+
+    result, row = repo.create_registration_if_seat_free(admin, lab, book_equipment=True)
+    assert result == "created_with_equipment"
+    assert row is not None
+    assert repo.get_equipment_booking(admin, lab) is not None
+
+
+def test_none_left_gives_created_without_equipment(passwords):
+    repo = EventsRepository(TEST_DB)
+    users = UsersRepository(TEST_DB)
+    admin = users.get_user_by_email("admin@example.com")["id"]
+    organizer = users.get_user_by_email("organizer@example.com")["id"]
+    lab = event_id("Advanced Python Lab")
+
+    with get_cursor(TEST_DB) as cur:
+        cur.execute("UPDATE events SET equipment_count = 1 WHERE id = %s;", (lab,))
+
+    res1, _ = repo.create_registration_if_seat_free(admin, lab, book_equipment=True)
+    assert res1 == "created_with_equipment"
+    assert repo.get_equipment_booking(admin, lab) is not None
+
+    res2, row2 = repo.create_registration_if_seat_free(organizer, lab, book_equipment=True)
+    assert res2 == "created_without_equipment"
+    assert row2 is not None
+    assert repo.get_registration(organizer, lab) is not None
+    assert repo.get_equipment_booking(organizer, lab) is None
+
+
+def test_cancel_removes_both_rows_and_reports_was_full(passwords):
+    repo = EventsRepository(TEST_DB)
+    users = UsersRepository(TEST_DB)
+    student = users.get_user_by_email("student@example.com")["id"]
+    lab = event_id("Advanced Python Lab")
+
+    with get_cursor(TEST_DB) as cur:
+        cur.execute("UPDATE events SET seats = 1, equipment_count = 1 WHERE id = %s;", (lab,))
+        cur.execute(
+            "INSERT INTO equipment_bookings (user_id, event_id) VALUES (%s, %s);",
+            (student, lab),
+        )
+
+    assert repo.get_registration(student, lab) is not None
+    assert repo.get_equipment_booking(student, lab) is not None
+
+    result, was_full = repo.cancel_registration(student, lab)
+    assert result == "cancelled"
+    assert was_full is True
+    assert repo.get_registration(student, lab) is None
+    assert repo.get_equipment_booking(student, lab) is None
+
+    # Cancelling again returns missing
+    res_missing, was_full_missing = repo.cancel_registration(student, lab)
+    assert res_missing == "missing"
+    assert was_full_missing is False
+
+    # Cancelling an event that was not full reports was_full = False
+    admin = users.get_user_by_email("admin@example.com")["id"]
+    with get_cursor(TEST_DB) as cur:
+        cur.execute("UPDATE events SET seats = 10 WHERE id = %s;", (lab,))
+    repo.create_registration_if_seat_free(admin, lab)
+    res_not_full, was_full_not_full = repo.cancel_registration(admin, lab)
+    assert res_not_full == "cancelled"
+    assert was_full_not_full is False
+
+
+def test_deleting_a_saved_row(passwords):
+    repo = EventsRepository(TEST_DB)
+    users = UsersRepository(TEST_DB)
+    student = users.get_user_by_email("student@example.com")["id"]
+    admin = users.get_user_by_email("admin@example.com")["id"]
+    lab = event_id("Advanced Python Lab")
+
+    repo.create_saved_event(student, lab)
+    repo.create_saved_event(admin, lab)
+    assert repo.get_saved_event(student, lab) is not None
+    assert set(repo.get_saver_ids(lab)) == {student, admin}
+
+    assert repo.delete_saved_event(student, lab) is True
+    assert repo.get_saved_event(student, lab) is None
+    assert repo.delete_saved_event(student, lab) is False
+
+    notifs = repo.create_notifications([admin], lab, "Seat opened up")
+    assert len(notifs) == 1
+    assert notifs[0]["user_id"] == admin
+    assert notifs[0]["message"] == "Seat opened up"
