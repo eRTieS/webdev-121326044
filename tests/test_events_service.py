@@ -22,10 +22,13 @@ class FakeEventsRepository:
                 "duration_minutes": 90,
                 "seats": 20,
                 "free_seats": 19,
+                "equipment_count": 5,
             }
         ]
         self.registrations = []
         self.saved_events = []
+        self.equipment_bookings = []
+        self.notifications = []
         self.vanish_on_lock = False
 
     def get_upcoming_published_events(self):
@@ -40,7 +43,13 @@ class FakeEventsRepository:
             None,
         )
 
-    def create_registration_if_seat_free(self, user_id: int, event_id: int):
+    def get_equipment_booking(self, user_id: int, event_id: int):
+        return next(
+            (b for b in self.equipment_bookings if b["user_id"] == user_id and b["event_id"] == event_id),
+            None,
+        )
+
+    def create_registration_if_seat_free(self, user_id: int, event_id: int, book_equipment: bool = False):
         event = None if self.vanish_on_lock else self.get_event(event_id)
         if event is None:
             return "missing", None
@@ -51,7 +60,32 @@ class FakeEventsRepository:
             return "full", None
         record = {"id": len(self.registrations) + 1, "user_id": user_id, "event_id": event_id}
         self.registrations.append(record)
-        return "created", record
+
+        if not book_equipment:
+            return "created", record
+
+        equipment_taken = sum(1 for b in self.equipment_bookings if b["event_id"] == event_id)
+        if equipment_taken < event.get("equipment_count", 0):
+            booking = {"id": len(self.equipment_bookings) + 1, "user_id": user_id, "event_id": event_id}
+            self.equipment_bookings.append(booking)
+            return "created_with_equipment", record
+        return "created_without_equipment", record
+
+    def cancel_registration(self, user_id: int, event_id: int):
+        event = None if self.vanish_on_lock else self.get_event(event_id)
+        if event is None:
+            return "missing", False
+        reg = self.get_registration(user_id, event_id)
+        if reg is None:
+            return "missing", False
+        was_full = sum(1 for r in self.registrations if r["event_id"] == event_id) >= event["seats"]
+        self.equipment_bookings = [
+            b for b in self.equipment_bookings if not (b["user_id"] == user_id and b["event_id"] == event_id)
+        ]
+        self.registrations = [
+            r for r in self.registrations if not (r["user_id"] == user_id and r["event_id"] == event_id)
+        ]
+        return "cancelled", was_full
 
     def create_saved_event(self, user_id: int, event_id: int):
         for s in self.saved_events:
@@ -60,6 +94,24 @@ class FakeEventsRepository:
         record = {"id": len(self.saved_events) + 1, "user_id": user_id, "event_id": event_id}
         self.saved_events.append(record)
         return record
+
+    def delete_saved_event(self, user_id: int, event_id: int):
+        prev_len = len(self.saved_events)
+        self.saved_events = [
+            s for s in self.saved_events if not (s["user_id"] == user_id and s["event_id"] == event_id)
+        ]
+        return len(self.saved_events) < prev_len
+
+    def get_saver_ids(self, event_id: int):
+        return [s["user_id"] for s in self.saved_events if s["event_id"] == event_id]
+
+    def create_notifications(self, user_ids: list[int], event_id: int, message: str):
+        created = []
+        for uid in user_ids:
+            notif = {"id": len(self.notifications) + 1, "user_id": uid, "event_id": event_id, "message": message}
+            self.notifications.append(notif)
+            created.append(notif)
+        return created
 
 
 ACTIVE = {"id": 1, "email": "active@example.com", "role": "user", "is_blocked": False}
@@ -199,3 +251,107 @@ def test_event_deleted_between_check_and_sign_up_is_not_found():
 
     with pytest.raises(NotFoundError, match="Event not found"):
         make_service(repo).sign_up(ACTIVE, event_id=1)
+
+
+def test_sign_up_returns_message_for_created():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    reg = service.sign_up(ACTIVE, event_id=1)
+    assert reg["message"] == "You are signed up"
+
+
+def test_sign_up_with_equipment_allocates_laptop_and_returns_message():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    reg = service.sign_up(ACTIVE, event_id=1, book_equipment=True)
+    assert reg["message"] == "You are signed up with a laptop"
+    assert repo.get_equipment_booking(ACTIVE["id"], 1) is not None
+
+
+def test_sign_up_with_equipment_when_none_left_returns_fallback_message():
+    repo = FakeEventsRepository()
+    repo.events[0]["equipment_count"] = 0
+    service = make_service(repo)
+    reg = service.sign_up(ACTIVE, event_id=1, book_equipment=True)
+    assert reg["message"] == "No equipment left: please bring your own"
+    assert repo.get_equipment_booking(ACTIVE["id"], 1) is None
+
+
+def test_sign_up_deletes_saved_event_for_user():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    service.save_event(ACTIVE, event_id=1)
+    assert len(repo.saved_events) == 1
+
+    service.sign_up(ACTIVE, event_id=1)
+    assert len(repo.saved_events) == 0
+
+
+def test_cancel_reservation_removes_registration_and_equipment():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    service.sign_up(ACTIVE, event_id=1, book_equipment=True)
+    assert repo.get_registration(ACTIVE["id"], 1) is not None
+    assert repo.get_equipment_booking(ACTIVE["id"], 1) is not None
+
+    res = service.cancel_reservation(ACTIVE, event_id=1)
+    assert res == {"message": "Your reservation is cancelled"}
+    assert repo.get_registration(ACTIVE["id"], 1) is None
+    assert repo.get_equipment_booking(ACTIVE["id"], 1) is None
+
+
+def test_cancel_reservation_missing_raises_not_found():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    with pytest.raises(NotFoundError, match="You have no reservation for this event"):
+        service.cancel_reservation(ACTIVE, event_id=1)
+
+
+def test_cancel_reservation_allows_blocked_user_and_unpublished_event():
+    repo = FakeEventsRepository()
+    repo.events.append({**repo.events[0], "id": 2, "status": "draft"})
+    repo.registrations.append({"id": 1, "user_id": BLOCKED["id"], "event_id": 2})
+    service = make_service(repo)
+
+    res = service.cancel_reservation(BLOCKED, event_id=2)
+    assert res == {"message": "Your reservation is cancelled"}
+    assert repo.get_registration(BLOCKED["id"], 2) is None
+
+
+def test_cancel_reservation_when_full_notifies_savers_in_sofia_time():
+    repo = FakeEventsRepository()
+    repo.events[0]["seats"] = 1
+    user1 = ACTIVE
+    user2 = {**ACTIVE, "id": 2, "email": "user2@example.com"}
+    user3 = {**ACTIVE, "id": 3, "email": "user3@example.com"}
+    service = make_service(repo)
+
+    service.sign_up(user1, event_id=1)
+    service.save_event(user2, event_id=1)
+    service.save_event(user3, event_id=1)
+    assert len(repo.saved_events) == 2
+
+    service.cancel_reservation(user1, event_id=1)
+    assert len(repo.notifications) == 2
+    # NOW is 2026-11-10 12:00 UTC. Event start_time is NOW + 1 day = 2026-11-11 12:00 UTC.
+    # In Europe/Sofia (UTC+2 in November), this is 11 Nov 2026 at 14:00.
+    assert (
+        repo.notifications[0]["message"]
+        == "Upcoming Lab on 11 Nov 2026 at 14:00: a seat has opened up"
+    )
+    assert repo.notifications[0]["user_id"] == user2["id"]
+    assert repo.notifications[1]["user_id"] == user3["id"]
+
+
+def test_cancel_reservation_when_not_full_does_not_notify_savers():
+    repo = FakeEventsRepository()
+    repo.events[0]["seats"] = 5
+    user1 = ACTIVE
+    user2 = {**ACTIVE, "id": 2, "email": "user2@example.com"}
+    service = make_service(repo)
+
+    service.sign_up(user1, event_id=1)
+    service.save_event(user2, event_id=1)
+
+    service.cancel_reservation(user1, event_id=1)
+    assert repo.notifications == []
