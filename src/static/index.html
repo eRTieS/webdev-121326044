@@ -83,15 +83,30 @@
 
                                     <p x-show="event.description" x-text="event.description" style="color: var(--color-text-muted); font-size: var(--font-size-sm);"></p>
 
-                                    <!-- AC-5: The Sign up and Save buttons are NOT shown for blocked users -->
+                                    <!-- Blocked user: no actions, only the existing block message (AC-5) -->
                                     <template x-if="!user.is_blocked">
-                                        <div class="event-actions">
-                                            <button class="btn btn-primary" @click="signUpForEvent(event.id)" :disabled="actionLoading === event.id">
-                                                Sign up
-                                            </button>
-                                            <button class="btn btn-outline" @click="saveEvent(event.id)" :disabled="actionLoading === event.id">
-                                                Save
-                                            </button>
+                                        <div class="event-actions" style="align-items: center; flex-wrap: wrap;">
+                                            <!-- signed up: "Cancel reservation" (DELETE /api/events/{id}/register), and no Save -->
+                                            <template x-if="event.signed_up">
+                                                <button class="btn btn-secondary" @click="cancelReservation(event.id)" :disabled="actionLoading === event.id">
+                                                    Cancel reservation
+                                                </button>
+                                            </template>
+
+                                            <!-- not signed up: "Sign up" with a "Request a laptop" checkbox, and "Save" ("Saved" when saved is true) -->
+                                            <template x-if="!event.signed_up">
+                                                <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+                                                    <button class="btn btn-primary" @click="signUpForEvent(event.id)" :disabled="actionLoading === event.id">
+                                                        Sign up
+                                                    </button>
+                                                    <label :for="'equip-' + event.id" style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: var(--font-size-sm); font-weight: normal;">
+                                                        <input :id="'equip-' + event.id" type="checkbox" x-model="equipmentRequests[event.id]" :disabled="actionLoading === event.id">
+                                                        <span>Request a laptop</span>
+                                                    </label>
+                                                    <button class="btn btn-outline" @click="saveEvent(event.id)" :disabled="actionLoading === event.id" x-text="event.saved ? 'Saved' : 'Save'">
+                                                    </button>
+                                                </div>
+                                            </template>
                                         </div>
                                     </template>
                                 </div>
@@ -153,6 +168,7 @@
                 eventsLoading: false,
                 eventsError: '',
                 actionLoading: null,
+                equipmentRequests: {},
 
                 async init() {
                     this.loading = true;
@@ -229,16 +245,38 @@
                     this.errorMessage = '';
                     this.successMessage = '';
                     try {
-                        const res = await fetch(`/api/events/${eventId}/register`, { method: 'POST' });
+                        const bookEquipment = !!this.equipmentRequests[eventId];
+                        const url = `/api/events/${eventId}/register` + (bookEquipment ? '?book_equipment=true' : '');
+                        const res = await fetch(url, { method: 'POST' });
                         const data = await res.json();
                         if (!res.ok) {
                             this.errorMessage = data.detail || 'Failed to sign up.';
-                            return;
+                        } else {
+                            this.successMessage = data.message || 'You are signed up';
                         }
-                        this.successMessage = data.message || 'You are signed up';
                         await this.fetchEvents();
                     } catch (e) {
                         this.errorMessage = 'Network error while attempting sign-up.';
+                    } finally {
+                        this.actionLoading = null;
+                    }
+                },
+
+                async cancelReservation(eventId) {
+                    this.actionLoading = eventId;
+                    this.errorMessage = '';
+                    this.successMessage = '';
+                    try {
+                        const res = await fetch(`/api/events/${eventId}/register`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            this.errorMessage = data.detail || 'Failed to cancel reservation.';
+                        } else {
+                            this.successMessage = data.message || 'Your reservation is cancelled';
+                        }
+                        await this.fetchEvents();
+                    } catch (e) {
+                        this.errorMessage = 'Network error while attempting to cancel reservation.';
                     } finally {
                         this.actionLoading = null;
                     }
@@ -253,9 +291,10 @@
                         const data = await res.json();
                         if (!res.ok) {
                             this.errorMessage = data.detail || 'Failed to save event.';
-                            return;
+                        } else {
+                            this.successMessage = data.message || 'Event saved';
                         }
-                        this.successMessage = data.message || 'Event saved';
+                        await this.fetchEvents();
                     } catch (e) {
                         this.errorMessage = 'Network error while attempting to save event.';
                     } finally {
