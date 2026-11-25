@@ -32,7 +32,7 @@ class EventsRepository:
 
     def get_event(self, event_id: int) -> dict[str, Any] | None:
         sql = """
-            SELECT id, status, seats, start_time, reservation_open, reservation_close
+            SELECT id, title, status, seats, start_time, reservation_open, reservation_close
             FROM events
             WHERE id = %s;
         """

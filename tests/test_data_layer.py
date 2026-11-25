@@ -82,6 +82,7 @@ def test_upcoming_events_are_published_and_not_started(passwords):
 def test_get_event(passwords):
     repo = EventsRepository(TEST_DB)
     event = repo.get_event(event_id("Draft Robotics Workshop"))
+    assert event["title"] == "Draft Robotics Workshop"
     assert event["status"] == "draft"
     assert event["start_time"] > datetime.now(timezone.utc)
     assert repo.get_event(999999) is None
