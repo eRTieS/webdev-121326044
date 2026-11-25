@@ -31,8 +31,15 @@ class FakeEventsRepository:
         self.notifications = []
         self.vanish_on_lock = False
 
-    def get_upcoming_published_events(self):
-        return self.events
+    def get_upcoming_published_events(self, user_id: int | None = None):
+        return [
+            {
+                **e,
+                "signed_up": any(r["user_id"] == user_id and r["event_id"] == e["id"] for r in self.registrations),
+                "saved": any(s["user_id"] == user_id and s["event_id"] == e["id"] for s in self.saved_events),
+            }
+            for e in self.events
+        ]
 
     def get_event(self, event_id: int):
         return next((e for e in self.events if e["id"] == event_id), None)
@@ -355,3 +362,55 @@ def test_cancel_reservation_when_not_full_does_not_notify_savers():
 
     service.cancel_reservation(user1, event_id=1)
     assert repo.notifications == []
+
+
+def test_blocked_user_cannot_sign_up_with_equipment_or_save_event():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+
+    with pytest.raises(BlockedUserError, match="Your account is blocked"):
+        service.sign_up(BLOCKED, event_id=1, book_equipment=True)
+    assert repo.registrations == []
+    assert repo.equipment_bookings == []
+
+    with pytest.raises(BlockedUserError, match="Your account is blocked"):
+        service.save_event(BLOCKED, event_id=1)
+    assert repo.saved_events == []
+
+
+def test_user_cannot_cancel_another_users_reservation():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    user_a = ACTIVE
+    user_b = {**ACTIVE, "id": 2, "email": "user_b@example.com"}
+
+    # User A signs up with a laptop
+    service.sign_up(user_a, event_id=1, book_equipment=True)
+    assert repo.get_registration(user_a["id"], 1) is not None
+    assert repo.get_equipment_booking(user_a["id"], 1) is not None
+
+    # User B tries to cancel on this event
+    with pytest.raises(NotFoundError, match="You have no reservation for this event"):
+        service.cancel_reservation(user_b, event_id=1)
+
+    # User A's registration and laptop booking stay
+    assert repo.get_registration(user_a["id"], 1) is not None
+    assert repo.get_equipment_booking(user_a["id"], 1) is not None
+
+
+def test_get_upcoming_events_reports_signed_up_and_saved_flags():
+    repo = FakeEventsRepository()
+    service = make_service(repo)
+    user_a = ACTIVE
+    user_b = {**ACTIVE, "id": 2, "email": "user_b@example.com"}
+
+    service.sign_up(user_a, event_id=1)
+    service.save_event(user_b, event_id=1)
+
+    events_a = service.get_upcoming_events(user_a)
+    assert events_a[0]["signed_up"] is True
+    assert events_a[0]["saved"] is False
+
+    events_b = service.get_upcoming_events(user_b)
+    assert events_b[0]["signed_up"] is False
+    assert events_b[0]["saved"] is True

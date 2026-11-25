@@ -30,7 +30,7 @@ class EventsService:
 
     def get_upcoming_events(self, user: dict[str, Any]) -> list[dict[str, Any]]:
         # All signed-in accounts (including blocked accounts) may view upcoming published events
-        return self.events_repo.get_upcoming_published_events()
+        return self.events_repo.get_upcoming_published_events(user["id"])
 
     def sign_up(
         self, user: dict[str, Any], event_id: int, book_equipment: bool = False

@@ -6,7 +6,7 @@ class EventsRepository:
     def __init__(self, conn_str: str | None = None):
         self.conn_str = conn_str
 
-    def get_upcoming_published_events(self) -> list[dict[str, Any]]:
+    def get_upcoming_published_events(self, user_id: int | None = None) -> list[dict[str, Any]]:
         sql = """
             SELECT 
                 e.id,
@@ -18,7 +18,15 @@ class EventsRepository:
                 e.equipment_count,
                 e.status,
                 r.name AS room_name,
-                GREATEST(e.seats - COUNT(reg.id), 0) AS free_seats
+                GREATEST(e.seats - COUNT(reg.id), 0) AS free_seats,
+                EXISTS(
+                    SELECT 1 FROM registrations r2
+                    WHERE r2.event_id = e.id AND r2.user_id = %s
+                ) AS signed_up,
+                EXISTS(
+                    SELECT 1 FROM saved_events s
+                    WHERE s.event_id = e.id AND s.user_id = %s
+                ) AS saved
             FROM events e
             JOIN rooms r ON e.room_id = r.id
             LEFT JOIN registrations reg ON reg.event_id = e.id
@@ -27,7 +35,7 @@ class EventsRepository:
             ORDER BY e.start_time ASC;
         """
         with get_cursor(self.conn_str) as cur:
-            cur.execute(sql)
+            cur.execute(sql, (user_id, user_id))
             return cur.fetchall()
 
     def get_event(self, event_id: int) -> dict[str, Any] | None:

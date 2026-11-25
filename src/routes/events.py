@@ -26,6 +26,8 @@ class UpcomingEventResponse(BaseModel):
     duration_minutes: int
     seats: int
     free_seats: int
+    signed_up: bool
+    saved: bool
 
 
 def get_events_service() -> EventsService:
@@ -48,6 +50,8 @@ def get_upcoming_events(
             duration_minutes=e["duration_minutes"],
             seats=e["seats"],
             free_seats=e["free_seats"],
+            signed_up=bool(e.get("signed_up", False)),
+            saved=bool(e.get("saved", False)),
         )
         for e in events
     ]

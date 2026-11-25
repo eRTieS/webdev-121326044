@@ -55,10 +55,15 @@ class Slice1EventsRepository:
         self.registrations = []
         self.saved_events = []
 
-    def get_upcoming_published_events(self):
+    def get_upcoming_published_events(self, user_id: int | None = None):
         # Emulates: WHERE status = 'published' AND start_time > NOW()
         return [
-            e for e in self.all_events
+            {
+                **e,
+                "signed_up": any(r["user_id"] == user_id and r["event_id"] == e["id"] for r in self.registrations),
+                "saved": any(s["user_id"] == user_id and s["event_id"] == e["id"] for s in self.saved_events),
+            }
+            for e in self.all_events
             if e["status"] == "published" and e["is_future"]
         ]
 

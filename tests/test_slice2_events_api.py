@@ -388,3 +388,61 @@ def test_AC_18_save_event_already_signed_up_refused_with_409(passwords):
     assert resp.status_code == 409
     assert resp.json()["detail"] == "You are already signed up for this event"
     assert count_rows("saved_events", event_id=lab, user_id=student) == 0
+
+
+def test_user_cannot_cancel_another_users_reservation(passwords):
+    lab = event_id("Advanced Python Lab")
+    admin = user_id("admin@example.com")
+    organizer = user_id("organizer@example.com")
+
+    # User A (admin) signs up with a laptop
+    client_a = TestClient(app)
+    login(client_a, "admin@example.com", passwords)
+    reg_resp = client_a.post(f"/api/events/{lab}/register?book_equipment=true")
+    assert reg_resp.status_code == 201
+    assert count_rows("registrations", event_id=lab, user_id=admin) == 1
+    assert count_rows("equipment_bookings", event_id=lab, user_id=admin) == 1
+
+    # User B (organizer) tries to cancel on this event
+    client_b = TestClient(app)
+    login(client_b, "organizer@example.com", passwords)
+    cancel_resp = client_b.delete(f"/api/events/{lab}/register")
+    assert cancel_resp.status_code == 404
+    assert cancel_resp.json()["detail"] == "You have no reservation for this event"
+
+    # User A's rows in registrations and equipment_bookings are unchanged
+    assert count_rows("registrations", event_id=lab, user_id=admin) == 1
+    assert count_rows("equipment_bookings", event_id=lab, user_id=admin) == 1
+
+
+def test_upcoming_events_flags_true_after_signup_and_save_false_for_other(passwords):
+    lab = event_id("Advanced Python Lab")
+    client_admin = TestClient(app)
+    login(client_admin, "admin@example.com", passwords)
+
+    client_organizer = TestClient(app)
+    login(client_organizer, "organizer@example.com", passwords)
+
+    # Admin signs up for lab
+    reg_resp = client_admin.post(f"/api/events/{lab}/register")
+    assert reg_resp.status_code == 201
+
+    # Organizer saves lab
+    save_resp = client_organizer.post(f"/api/events/{lab}/save")
+    assert save_resp.status_code == 200
+
+    # Admin sees signed_up=True, saved=False
+    resp_admin = client_admin.get("/api/events/upcoming")
+    assert resp_admin.status_code == 200
+    admin_events = [e for e in resp_admin.json() if e["id"] == lab]
+    assert len(admin_events) == 1
+    assert admin_events[0]["signed_up"] is True
+    assert admin_events[0]["saved"] is False
+
+    # Organizer sees signed_up=False, saved=True
+    resp_org = client_organizer.get("/api/events/upcoming")
+    assert resp_org.status_code == 200
+    org_events = [e for e in resp_org.json() if e["id"] == lab]
+    assert len(org_events) == 1
+    assert org_events[0]["signed_up"] is False
+    assert org_events[0]["saved"] is True

@@ -212,3 +212,25 @@ def test_deleting_a_saved_row(passwords):
     assert len(notifs) == 1
     assert notifs[0]["user_id"] == admin
     assert notifs[0]["message"] == "Seat opened up"
+
+
+def test_upcoming_events_signed_up_and_saved_flags(passwords):
+    repo = EventsRepository(TEST_DB)
+    users = UsersRepository(TEST_DB)
+    student = users.get_user_by_email("student@example.com")["id"]
+    admin = users.get_user_by_email("admin@example.com")["id"]
+    lab = event_id("Advanced Python Lab")
+
+    # In seed, student is registered for lab, admin has not registered or saved.
+    # Admin saves lab.
+    repo.create_saved_event(admin, lab)
+
+    student_events = repo.get_upcoming_published_events(student)
+    assert len(student_events) == 1
+    assert student_events[0]["signed_up"] is True
+    assert student_events[0]["saved"] is False
+
+    admin_events = repo.get_upcoming_published_events(admin)
+    assert len(admin_events) == 1
+    assert admin_events[0]["signed_up"] is False
+    assert admin_events[0]["saved"] is True
