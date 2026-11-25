@@ -20,16 +20,6 @@ TEST_DB = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not TEST_DB, reason="TEST_DATABASE_URL is not set")
 
 
-@pytest.fixture
-def passwords():
-    if TEST_DB == os.environ.get("DATABASE_URL"):
-        pytest.fail("TEST_DATABASE_URL is the development database; these tests would wipe it")
-    with get_cursor(TEST_DB) as cur:
-        cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-    migrate(TEST_DB)
-    return seed(TEST_DB, iterations=1000)
-
-
 def event_id(title):
     with get_cursor(TEST_DB) as cur:
         cur.execute("SELECT id FROM events WHERE title = %s;", (title,))

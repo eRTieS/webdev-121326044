@@ -53,15 +53,30 @@ def get_upcoming_events(
     ]
 
 
-@router.post("/{event_id}/register")
+@router.post("/{event_id}/register", status_code=status.HTTP_201_CREATED)
 def register_for_event(
+    event_id: int,
+    book_equipment: bool = False,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    events_service: EventsService = Depends(get_events_service),
+):
+    try:
+        registration = events_service.sign_up(
+            current_user, event_id, book_equipment=book_equipment
+        )
+        return {"message": registration["message"], "registration": registration}
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS[type(e)], detail=str(e))
+
+
+@router.delete("/{event_id}/register")
+def cancel_registration_for_event(
     event_id: int,
     current_user: dict[str, Any] = Depends(get_current_user),
     events_service: EventsService = Depends(get_events_service),
 ):
     try:
-        registration = events_service.sign_up(current_user, event_id)
-        return {"message": "You are signed up", "registration": registration}
+        return events_service.cancel_reservation(current_user, event_id)
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS[type(e)], detail=str(e))
 
